@@ -1,3 +1,4 @@
+import os
 import bucket_io
 import lstm
 import mxnet as mx
@@ -28,26 +29,19 @@ def text2id(sentence, the_vocab):
 
 # Evaluation metric
 def Perplexity(label, pred):
+    label = label.T.reshape((-1,))
     loss = 0.
     for i in range(pred.shape[0]):
         loss += -np.log(max(1e-10, pred[i][int(label[i])]))
     return np.exp(loss / label.size)
 
-
-if __name__ == "__main__":
+def train(seq_len, num_embed, num_lstm_layer, num_hidden, batch_size,
+          num_epoch, learning_rate, gpus, vocab_file, param_file):
+    """Training."""
 
     # build char vocabluary from input
-    vocab = build_vocab("../input.txt")
+    vocab = build_vocab(vocab_file)
     print('vocab size = %d' %(len(vocab)))
-
-    # Each line contains at most 129 chars. 
-    seq_len = 129
-    # embedding dimension, which maps a character to a 256-dimension vector
-    num_embed = 256
-    # number of lstm layers
-    num_lstm_layer = 3
-    # hidden unit in LSTM cell
-    num_hidden = 512
 
     symbol = lstm.lstm_unroll(
         num_lstm_layer, 
@@ -59,13 +53,10 @@ if __name__ == "__main__":
         dropout=0.2)
 
     """test_seq_len"""
-    data_file = open("../input.txt")
+    data_file = open(vocab_file)
     for line in data_file:
         assert len(line) <= seq_len + 1, "seq_len is smaller than maximum line length. Current line length is %d. Line content is: %s" % (len(line), line)
     data_file.close()
-
-    # The batch size for training
-    batch_size = 32
 
     # initalize states for LSTM
     init_c = [('l%d_init_c'%l, (batch_size, num_hidden)) for l in range(num_lstm_layer)]
@@ -75,7 +66,7 @@ if __name__ == "__main__":
     # Even though BucketSentenceIter supports various length examples,
     # we simply use the fixed length version here
     data_train = bucket_io.BucketSentenceIter(
-        "../input.txt", 
+        vocab_file,
         vocab,
         [seq_len], 
         batch_size,
@@ -86,13 +77,43 @@ if __name__ == "__main__":
 
     logging.getLogger().setLevel(logging.DEBUG)
 
-    # We will show a quick demo with only 1 epoch. In practice, we can set it to be 100
-    num_epoch = 1
-    # learning rate 
-    learning_rate = 0.01
+    # context
+    ctx = mx.cpu()
+    if len(gpus) > 0:
+        ctx = [mx.gpu(int(i)) for i in gpus.split(',')]
+
+    # buckets = [10, 20, 30, 40, 50, 60]
+    # buckets = [32]
+    # state_names = [x[0] for x in init_states]
+    # def sym_gen(seq_len):
+    #     data_names = ['data'] + state_names
+    #     label_names = ['softmax_label']
+    #     return (symbol, data_names, label_names)
+    #
+    # if len(buckets) == 1:
+    #     mod = mx.mod.Module(*sym_gen(buckets[0]), context=ctx)
+    # 
+    #     head = '%(asctime)-15s %(message)s'
+    #     logging.basicConfig(level=logging.DEBUG, format=head)
+    # 
+    #     mod.fit(data_train, num_epoch=num_epoch, eval_data=data_train,
+    #         eval_metric=mx.metric.np(Perplexity),
+    #         batch_end_callback=mx.callback.Speedometer(batch_size, 50),
+    #         epoch_end_callback=mx.callback.do_checkpoint(param_file),
+    #         initializer=mx.init.Xavier(factor_type="in", magnitude=2.34),
+    #         optimizer='sgd',
+    #         optimizer_params={'learning_rate': learning_rate, 'momentum': 0.9, 'wd': 0.00001})
+    # 
+    #     Now it is very easy to use the bucketing to do scoring or collect prediction outputs
+    #     metric = mx.metric.np(Perplexity)
+    #     mod.score(data_val, metric)
+    #     for name, val in metric.get_name_value():
+    #         logging.info('Validation-%s=%f', name, val)
+    # 
+    # else:
 
     model = mx.model.FeedForward(
-        ctx=mx.cpu(),
+        ctx=ctx,
         symbol=symbol,
         num_epoch=num_epoch,
         learning_rate=learning_rate,
@@ -103,4 +124,43 @@ if __name__ == "__main__":
     model.fit(X=data_train,
               eval_metric=mx.metric.np(Perplexity),
               batch_end_callback=mx.callback.Speedometer(batch_size, 20),
-              epoch_end_callback=mx.callback.do_checkpoint("model"))
+              epoch_end_callback=mx.callback.do_checkpoint(param_file))
+
+
+if __name__ == "__main__":
+
+    # Each line contains at most xxx chars. 
+    seq_len = int(os.getenv("SEQUENCE_LEN", "130"))
+    print('sequence length = %d' % seq_len)
+    # embedding dimension, which maps a character to a 256-dimension vector
+    num_embed = 256
+    # number of lstm layers
+    num_lstm_layer = int(os.getenv("LSTM_LAYERS", "3"))
+    print('lstm layers = %d' % num_lstm_layer)
+    # hidden unit in LSTM cell
+    num_hidden = int(os.getenv("UNITS_IN_CELL", "512"))
+    print('unit in LSTM cell = %d' % num_hidden)
+    # The batch size for training
+    batch_size = int(os.getenv("BATCH_SIZE", "32"))
+    print('batch size = %d' % batch_size)
+    # In practice, we can set it to be 100
+    num_epoch = int(os.getenv("LEARNING_EPOCHS", "10"))
+    print('epoch = %d' % num_epoch)
+    # learning rate
+    learning_rate = float(os.getenv("LEARNING_RATE", "0.01"))
+    print('learning rate = %f' % learning_rate)
+    # context
+    gpus = os.getenv("GPUS", "")
+    print('GPUs = %s' % gpus)
+
+    # vocabulary file
+    vocab_file = os.getenv("VOCABULARY_FILE", "./input.txt")
+    print('vocabulary file = %s' % vocab_file)
+    # model
+    param_file = os.getenv("PARAMETERS_FILE", "model")
+    print('parameters file = %s' % param_file)
+
+    train(seq_len=seq_len, num_embed=num_embed, num_lstm_layer=num_lstm_layer,
+          num_hidden=num_hidden, batch_size=batch_size, num_epoch=num_epoch,
+          learning_rate=learning_rate, gpus=gpus, vocab_file=vocab_file,
+          param_file=param_file)

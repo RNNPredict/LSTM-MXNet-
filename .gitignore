@@ -1,5 +1,7 @@
 *.pyc
-model-*
+*.params
+*-symbol.json
 data/[^.]*
+app/*.txt
 input.txt
 .ipynb_checkpoints
