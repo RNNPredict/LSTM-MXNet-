@@ -1,0 +1,5 @@
+*.pyc
+model-*
+data/[^.]*
+input.txt
+.ipynb_checkpoints

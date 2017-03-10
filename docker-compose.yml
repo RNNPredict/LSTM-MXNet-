@@ -1,0 +1,12 @@
+version: "2.1"
+
+services:
+  jupyter:
+    image: mxnet-char-lstm:20170307
+    build: ./development
+    ports:
+      - 8888:8888
+    volumes:
+      - .:/root/notebook
+    restart: always
+    container_name: jupyter
