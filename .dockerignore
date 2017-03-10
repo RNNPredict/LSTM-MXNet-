@@ -1,0 +1,9 @@
+*
+!app/inference.py
+!app/lstm.py
+!app/rnn.py
+!app/rnn_model.py
+!app/train.py
+!app/bucket_io.py
+!production/docker/inference/entrypoint.sh
+!production/docker/train/entrypoint.sh
