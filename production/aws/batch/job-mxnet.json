@@ -1,0 +1,33 @@
+{
+  "image": "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:training",
+  "command": ["/entrypoint.sh"],
+  "environment": [
+    { "name": "AWS_DEFAULT_REGION", "value": "${AWS_DEFAULT_REGION}"},
+    { "name": "AWS_S3_BUCKET", "value": "${S3_BUCKET_NAME}"},
+    { "name": "SEQUENCE_LEN", "value": "130"},
+    { "name": "LSTM_LAYERS", "value": "3"},
+    { "name": "UNITS_IN_CELL", "value": "512"},
+    { "name": "BATCH_SIZE", "value": "32"},
+    { "name": "LEARNING_EPOCHS", "value": "10"},
+    { "name": "LEARNING_RATE", "value": "0.01"},
+    { "name": "GPUS", "value": "0"}
+  ],
+  "volumes": [
+    {
+      "name": "nvidia_driver",
+      "host": {
+        "sourcePath": "/var/lib/nvidia-docker/volumes/nvidia_driver/367.57"
+      }
+    }
+  ],
+  "mountPoints": [
+    {
+      "containerPath": "/usr/local/nvidia",
+      "sourceVolume": "nvidia_driver",
+      "readOnly": false
+    }
+  ],
+  "vcpus": 7,
+  "memory": 10000,
+  "privileged": true
+}

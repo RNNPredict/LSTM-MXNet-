@@ -1,0 +1,22 @@
+{
+  "image": "nvidia/cuda:8.0-cudnn5-devel",
+  "command": ["nvidia-smi"],
+  "volumes": [
+    {
+      "name": "nvidia_driver",
+      "host": {
+        "sourcePath": "/var/lib/nvidia-docker/volumes/nvidia_driver/367.57"
+      }
+    }
+  ],
+  "mountPoints": [
+    {
+      "containerPath": "/usr/local/nvidia",
+      "sourceVolume": "nvidia_driver",
+      "readOnly": false
+    }
+  ],
+  "vcpus": 7,
+  "memory": 10000,
+  "privileged": true
+}

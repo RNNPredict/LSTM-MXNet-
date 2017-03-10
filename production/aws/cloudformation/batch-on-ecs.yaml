@@ -1,0 +1,262 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: "AWS Batch with GPUs - Unmanaged compute environment"
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: VPC Configuration
+        Parameters:
+          - PublicSubnets
+          - SecurityGroup
+      - Label:
+          default: EC2 Configuration
+        Parameters:
+          - InstanceType
+          - InstanceProfile
+          - KeyName
+      - Label:
+          default: Spot Configuration
+        Parameters:
+          - SpotFleetRole
+          - EC2SpotPrice
+          - DesiredCapacity
+          - MaxSize
+          - MinSize
+      - Label:
+          default: ECS Configuration
+        Parameters:
+          - ECSCluster
+
+Parameters:
+  ECSCluster:
+    Description: Name of the ECS cluster
+    Type: String
+
+  PublicSubnets:
+    Description: Select public subnets in your VPC for internet facing
+    Type: List<AWS::EC2::Subnet::Id>
+
+  InstanceType:
+    Description: Which instance type should we use to build the ECS cluster?
+    Type: String
+    Default: g2.2xlarge
+    AllowedValues:
+      - g2.2xlarge
+      - g2.8xlarge
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+
+  KeyName:
+    Description: Name of an existing EC2 KeyPair to enable SSH access
+    Type: AWS::EC2::KeyPair::KeyName
+
+  SecurityGroup:
+    Description: Select the Security Group for ECS container instances.
+    Type: AWS::EC2::SecurityGroup::Id
+
+  InstanceProfile:
+    Description: An IAM InstanceProfile for ECS container instances.
+    Type: String
+
+  SpotFleetRole:
+    Description: An IAM Role for SpotFleet.
+    Type: String
+
+  EC2SpotPrice:
+    Description: Spot price for application AutoScaling Group
+    Type: Number
+    Default: '0.05'
+
+  DesiredCapacity:
+    Type: Number
+    Default: '1'
+    Description: Number of instances to launch in your ECS cluster.
+
+  MaxSize:
+    Type: Number
+    Default: '5'
+    Description: Maximum number of instances that can be launched in your ECS cluster.
+
+  MinSize:
+    Type: Number
+    Default: '1'
+    Description: Minimum number of instances that can be launched in your ECS cluster.
+
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      AMI: ami-e7c96af1
+    us-west-2:
+      AMI: ami-dfb13ebf
+    eu-west-1:
+      AMI: ami-6e5d6808
+
+Resources:
+  SpotFleet:
+    Type: AWS::EC2::SpotFleet
+    Properties:
+      SpotFleetRequestConfigData:
+        IamFleetRole: !Ref SpotFleetRole
+        SpotPrice: !Ref EC2SpotPrice
+        TargetCapacity: !Ref DesiredCapacity
+        TerminateInstancesWithExpiration: false
+        AllocationStrategy: lowestPrice
+        LaunchSpecifications:
+          - ImageId: !FindInMap [AWSRegionToAMI, !Ref "AWS::Region", AMI]
+            InstanceType: !Ref InstanceType
+            SubnetId: !Join [ ',', !Ref 'PublicSubnets' ]
+            WeightedCapacity: !Ref DesiredCapacity
+            IamInstanceProfile:
+              Arn: !Ref InstanceProfile
+            KeyName: !Ref KeyName
+            SecurityGroups: 
+              - GroupId: !Ref SecurityGroup
+            EbsOptimized: true
+            Monitoring:
+              Enabled: true
+            UserData:
+              Fn::Base64: !Sub |
+                #!/bin/bash
+                yum install -y aws-cfn-bootstrap docker ecs-init
+                /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource SpotFleet
+                service docker start
+                start ecs
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            "/etc/ecs/ecs.config":
+              mode: 000400
+              owner: root
+              group: root
+              content: !Sub |
+                  ECS_CLUSTER=${ECSCluster}
+                  ECS_AVAILABLE_LOGGING_DRIVERS=["json-file","awslogs"]
+                  ECS_DISABLE_IMAGE_CLEANUP=false
+                  ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION=5m
+                  ECS_IMAGE_CLEANUP_INTERVAL=10m
+                  ECS_IMAGE_MINIMUM_CLEANUP_AGE=15m
+                  ECS_NUM_IMAGES_DELETE_PER_CYCLE=5
+                  ECS_INSTANCE_ATTRIBUTES={"gpu": "on"}
+
+            "/etc/cfn/cfn-hup.conf":
+              mode: 000400
+              owner: root
+              group: root
+              content: !Sub |
+                  [main]
+                  stack=${AWS::StackId}
+                  region=${AWS::Region}
+
+            "/etc/cfn/hooks.d/cfn-auto-reloader.conf":
+              content: !Sub |
+                  [cfn-auto-reloader-hook]
+                  triggers=post.update
+                  path=Resources.SpotFleet.Metadata.AWS::CloudFormation::Init
+                  action=/opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource SpotFleet
+
+          services:
+            sysvinit:
+              cfn-hup:
+                enabled: true
+                ensureRunning: true
+                files:
+                  - /etc/cfn/cfn-hup.conf
+                  - /etc/cfn/hooks.d/cfn-auto-reloader.conf
+
+  FleetScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: SpotFleet
+    Properties:
+      MaxCapacity: !Ref MaxSize
+      MinCapacity: !Ref MinSize
+      ResourceId: !Join ['', [spot-fleet-request/, !Ref SpotFleet]]
+      RoleARN: !GetAtt AutoscalingRole.Arn
+      ScalableDimension: ec2:spot-fleet-request:TargetCapacity
+      ServiceNamespace: ec2
+
+  FleetScalingUpPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: SpotFleetScaleUp
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref FleetScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 0
+          ScalingAdjustment: 1
+
+  FleetCPUAlarmScaleUp:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '90'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmDescription: Alarm if target instance CPU is overloaded
+      Period: '60'
+      AlarmActions: [!Ref FleetScalingUpPolicy]
+      Namespace: 'AWS/ECS'
+      Dimensions:
+      - Name: ClusterName
+        Value: !Ref ECSCluster
+      MetricName: CPUUtilization
+
+  FleetScalingDownPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: SpotFleetScaleDown
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref FleetScalingTarget
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalUpperBound: 0
+          ScalingAdjustment: -1
+
+  FleetCPUAlarmScaleDown:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '25'
+      ComparisonOperator: LessThanOrEqualToThreshold
+      AlarmDescription: Alarm if target instance CPU is underutlized
+      Period: '120'
+      AlarmActions: [!Ref FleetScalingDownPolicy]
+      Namespace: 'AWS/ECS'
+      Dimensions:
+      - Name: ClusterName
+        Value: !Ref ECSCluster
+      MetricName: CPUUtilization
+
+  AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: application-autoscaling.amazonaws.com
+          Action: sts:AssumeRole
+      Policies:
+      - PolicyName: service-autoscaling
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+              - application-autoscaling:*
+              - cloudwatch:DescribeAlarms
+              - cloudwatch:PutMetricAlarm
+              - ecs:DescribeServices
+              - ec2:ModifySpotFleetRequest
+              - ec2:DescribeSpotFleetRequests
+            Resource: '*'
+      Path: /
