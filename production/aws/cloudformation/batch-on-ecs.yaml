@@ -122,6 +122,10 @@ Resources:
                 yum install -y aws-cfn-bootstrap docker ecs-init
                 /opt/aws/bin/cfn-init -v --region ${AWS::Region} --stack ${AWS::StackName} --resource SpotFleet
                 service docker start
+                usermod -a -G docker ec2-user
+                wget -P /tmp https://github.com/NVIDIA/nvidia-docker/releases/download/v1.0.1/nvidia-docker_1.0.1_amd64.tar.xz
+                tar --strip-components=1 -C /usr/bin -xvf /tmp/nvidia-docker*.tar.xz && rm /tmp/nvidia-docker*.tar.xz
+                nohup nvidia-docker-plugin > /tmp/nvidia-docker.log
                 start ecs
     Metadata:
       AWS::CloudFormation::Init:
@@ -246,6 +250,8 @@ Resources:
           Principal:
             Service: application-autoscaling.amazonaws.com
           Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2SpotFleetAutoscaleRole
       Policies:
       - PolicyName: service-autoscaling
         PolicyDocument:
@@ -253,10 +259,7 @@ Resources:
           - Effect: Allow
             Action:
               - application-autoscaling:*
-              - cloudwatch:DescribeAlarms
               - cloudwatch:PutMetricAlarm
               - ecs:DescribeServices
-              - ec2:ModifySpotFleetRequest
-              - ec2:DescribeSpotFleetRequests
             Resource: '*'
       Path: /

@@ -1,5 +1,6 @@
 {
   "image": "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:training",
+  "jobRoleArn": "${BATCH_JOB_ROLE}",
   "command": ["/entrypoint.sh"],
   "environment": [
     { "name": "AWS_DEFAULT_REGION", "value": "${AWS_DEFAULT_REGION}"},

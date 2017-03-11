@@ -1,10 +1,11 @@
 # MXNet with NVIDIA CUDA 8.0 & cuDNN 5.1
 # https://hub.docker.com/r/nvidia/cuda/
-# docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:0.9.3 .
+# docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:0.8.0 .
 
-FROM nvidia/cuda:8.0-cudnn5-devel
+# FROM nvidia/cuda:8.0-cudnn5-devel
+FROM nvidia/cuda:7.5-cudnn5-devel
 
-ENV MXNET_VERSION=0.9.3 \
+ENV MXNET_VERSION=0.8.0 \
     PYTHONPATH=/mxnet/python \
     S6_VERSION=v1.19.1.1 \
     S6_LOGGING=1

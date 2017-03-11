@@ -2,7 +2,7 @@
 # https://hub.docker.com/r/nvidia/cuda/
 # docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:training -f production/docker/train/Dockerfile .
 
-FROM ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:0.9.3
+FROM ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com/mxnet:0.8.0
 
 ADD production/docker/train/entrypoint.sh /
 
