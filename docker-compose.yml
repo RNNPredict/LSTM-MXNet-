@@ -2,9 +2,10 @@ version: "2.1"
 
 services:
   jupyter:
-    image: mxnet-char-lstm:20170307
+    image: mxnet-char-lstm:20170311
     build: ./development
     ports:
+      - 5000:5000
       - 8888:8888
     volumes:
       - .:/root/notebook

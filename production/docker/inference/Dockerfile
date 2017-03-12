@@ -9,13 +9,14 @@ ADD production/docker/inference/entrypoint.sh /
 RUN apt-get update && apt-get autoremove -y \
     && apt-get install -y python-pip \
     && pip install "awscli==1.11.60" \
+    && pip install Flask \
     && apt-get clean \
     && chmod +x /entrypoint.sh
 
-ADD app/rnn.py /app/
-ADD app/rnn_model.py /app/
-ADD app/lstm.py /app/
-ADD app/inference.py /app/
+ADD src/inference/rnn.py /app/
+ADD src/inference/rnn_model.py /app/
+ADD src/inference/lstm.py /app/
+ADD src/inference/inference.py /app/
 
 ENV START_WITH="AWS Batch is" \
     SEQUENCE_LEN=500 \
