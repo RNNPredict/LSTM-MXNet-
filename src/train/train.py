@@ -41,7 +41,7 @@ def train(seq_len, num_embed, num_lstm_layer, num_hidden, batch_size,
 
     # build char vocabluary from input
     vocab = build_vocab(vocab_file)
-    print('vocab size = %d' %(len(vocab)))
+    logging.info('vocab size = %d', len(vocab))
 
     symbol = lstm.lstm_unroll(
         num_lstm_layer, 
@@ -74,8 +74,6 @@ def train(seq_len, num_embed, num_lstm_layer, num_hidden, batch_size,
         seperate_char='\n',
         text2id=text2id,
         read_content=read_content)
-
-    logging.getLogger().setLevel(logging.DEBUG)
 
     # context
     ctx = mx.cpu()
@@ -129,36 +127,38 @@ def train(seq_len, num_embed, num_lstm_layer, num_hidden, batch_size,
 
 if __name__ == "__main__":
 
+    logging.getLogger().setLevel(logging.DEBUG)
+
     # Each line contains at most xxx chars. 
     seq_len = int(os.getenv("SEQUENCE_LEN", "130"))
-    print('sequence length = %d' % seq_len)
+    logging.info('sequence length = %d', seq_len)
     # embedding dimension, which maps a character to a 256-dimension vector
     num_embed = 256
     # number of lstm layers
     num_lstm_layer = int(os.getenv("LSTM_LAYERS", "3"))
-    print('lstm layers = %d' % num_lstm_layer)
+    logging.info('lstm layers = %d', num_lstm_layer)
     # hidden unit in LSTM cell
     num_hidden = int(os.getenv("UNITS_IN_CELL", "512"))
-    print('unit in LSTM cell = %d' % num_hidden)
+    logging.info('unit in LSTM cell = %d', num_hidden)
     # The batch size for training
     batch_size = int(os.getenv("BATCH_SIZE", "32"))
-    print('batch size = %d' % batch_size)
+    logging.info('batch size = %d', batch_size)
     # In practice, we can set it to be 100
     num_epoch = int(os.getenv("LEARNING_EPOCHS", "10"))
-    print('epoch = %d' % num_epoch)
+    logging.info('epoch = %d', num_epoch)
     # learning rate
     learning_rate = float(os.getenv("LEARNING_RATE", "0.01"))
-    print('learning rate = %f' % learning_rate)
+    logging.info('learning rate = %f', learning_rate)
     # context
     gpus = os.getenv("GPUS", "")
-    print('GPUs = %s' % gpus)
+    logging.info('GPUs = %s', gpus)
 
     # vocabulary file
     vocab_file = os.getenv("VOCABULARY_FILE", "./input.txt")
-    print('vocabulary file = %s' % vocab_file)
+    logging.info('vocabulary file = %s', vocab_file)
     # model
     param_file = os.getenv("PARAMETERS_FILE", "model")
-    print('parameters file = %s' % param_file)
+    logging.info('parameters file = %s', param_file)
 
     train(seq_len=seq_len, num_embed=num_embed, num_lstm_layer=num_lstm_layer,
           num_hidden=num_hidden, batch_size=batch_size, num_epoch=num_epoch,

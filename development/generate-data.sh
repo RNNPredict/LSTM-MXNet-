@@ -13,4 +13,4 @@ popd
 
 cat ./data/*.txt | tr '\n' '.' | tr '\r' '.' \
   | sed -e 's/\.\.*/. /g' -e 's/[[:blank:]][[:blank:]]*/ /g' \
-  | fold -w 125 -s > input.txt
+  | fold -w 125 -s > src/train/input.txt

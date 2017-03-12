@@ -12,9 +12,9 @@ RUN apt-get update && apt-get autoremove -y \
     && apt-get clean \
     && chmod +x /entrypoint.sh
 
-ADD app/bucket_io.py /app/
-ADD app/lstm.py /app/
-ADD app/train.py /app/
+ADD src/train/bucket_io.py /app/
+ADD src/train/lstm.py /app/
+ADD src/train/train.py /app/
 
 ENV SEQUENCE_LEN=130 \
     LSTM_LAYERS=3 \

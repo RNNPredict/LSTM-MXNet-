@@ -1,6 +1,4 @@
 *.pyc
-*.params
-*-symbol.json
 data/[^.]*
 app/*.txt
 input.txt
